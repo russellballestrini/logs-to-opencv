@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 import queue
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker
+import argparse
 
 # Configure logging
 logging.basicConfig(
@@ -23,9 +24,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Global flag to control image generation
+GENERATE_IMAGES = True
+
 # Create directories if they don't exist
 os.makedirs("logs", exist_ok=True)
-os.makedirs("images", exist_ok=True)
+if GENERATE_IMAGES:
+    os.makedirs("images", exist_ok=True)
 
 # SQLAlchemy setup
 Base = declarative_base()
@@ -234,13 +239,20 @@ def generate_files_worker(log_data, filename, bitmap_filename):
             for header in log_data["Headers"]:
                 f.write(f"  {header}\n")
 
-        # Create all image formats
-        bitmap_gen.create_bitmap(log_data, bitmap_filename)
+        # Create all image formats only if enabled
+        if GENERATE_IMAGES:
+            bitmap_gen.create_bitmap(log_data, bitmap_filename)
 
-        logger.info(
-            f"Generated files for request ID {log_data['Request ID']} "
-            f"(worker: {threading.current_thread().name})"
-        )
+        if GENERATE_IMAGES:
+            logger.info(
+                f"Generated files for request ID {log_data['Request ID']} "
+                f"(worker: {threading.current_thread().name})"
+            )
+        else:
+            logger.info(
+                f"Generated log file for request ID {log_data['Request ID']} "
+                f"(worker: {threading.current_thread().name})"
+            )
 
     except Exception as e:
         logger.error(f"Error generating files for {log_data['Request ID']}: {e}")
@@ -461,6 +473,21 @@ def pastebin_get_view(request):
 
 
 def main():
+    global GENERATE_IMAGES
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Pyramid web server with request logging")
+    parser.add_argument('--no-images', action='store_true', help='Disable image generation')
+    args = parser.parse_args()
+    
+    # Set image generation flag
+    GENERATE_IMAGES = not args.no_images
+    
+    if not GENERATE_IMAGES:
+        logger.info("Image generation is DISABLED")
+    else:
+        logger.info("Image generation is ENABLED")
+    
     config = Configurator()
 
     # Add request counter middleware
