@@ -195,6 +195,34 @@ class UnifiedLogClassifier:
                 'raw_response': None
             }
     
+    def batch_analyze_detailed(self, log_directory: str, limit: Optional[int] = None) -> Dict[str, List[str]]:
+        """Batch analyze logs with detailed 3-sentence explanations."""
+        log_pattern = os.path.join(log_directory, "*.log")
+        log_files = sorted(glob.glob(log_pattern))
+        
+        if limit:
+            log_files = log_files[:limit]
+        
+        print(f"Found {len(log_files)} log files to analyze with detailed mode")
+        sys.stdout.flush()
+        
+        results = {"SPAM": [], "HAM": [], "ERROR": []}
+        
+        for i, log_file in enumerate(log_files):
+            log_basename = os.path.basename(log_file)
+            log_content = self.read_log_file(log_file)
+            if log_content:
+                result = self.analyze_detailed(log_content, log_basename)
+                classification = result['classification']
+                results[classification].append(log_basename)
+                print(f"Log {i+1}/{len(log_files)}: {log_basename} -> {classification}")
+                sys.stdout.flush()
+                
+        
+        print()
+        sys.stdout.flush()
+        return results
+    
     def batch_classify_spam_ham(self, log_directory: str, limit: Optional[int] = None) -> Dict[str, List[str]]:
         """Batch classify logs as SPAM or HAM."""
         log_pattern = os.path.join(log_directory, "*.log")
@@ -301,6 +329,12 @@ def main():
         help='Analysis mode to use'
     )
     parser.add_argument(
+        '--analysis-mode',
+        choices=['single_token', 'explained'],
+        default='explained',
+        help='Token output mode: single_token (SPAM/HAM only) or explained (3-sentence analysis) - default: explained'
+    )
+    parser.add_argument(
         '-d', '--directory',
         default='logs',
         help='Directory containing log files (default: logs)'
@@ -343,18 +377,26 @@ def main():
     
     elif args.mode == 'anomalies':
         # Analyze known anomalies
-        results = classifier.analyze_anomalies("detailed")
+        analysis_type = "spam_ham" if args.analysis_mode == "single_token" else "detailed"
+        results = classifier.analyze_anomalies(analysis_type)
         
         print("\n" + "="*80)
-        print("DETAILED ANOMALY ANALYSIS")
+        title = "SINGLE TOKEN ANOMALY ANALYSIS" if args.analysis_mode == "single_token" else "DETAILED ANOMALY ANALYSIS"
+        print(title)
         print("="*80)
         
+        spam_count = 0
         for result in results:
             request_num = result['filename'].split('_')[0]
             print(f"\nRequest #{int(request_num)}:")
             print(f"Classification: {result['classification']}")
-            print(f"Explanation: {result['explanation']}")
+            if 'explanation' in result and result['explanation']:
+                print(f"Explanation: {result['explanation']}")
             print("-"*80)
+            if result['classification'] == 'SPAM':
+                spam_count += 1
+        
+        print(f"\nDetection Rate: {spam_count}/{len(results)} ({spam_count/len(results)*100:.0f}%)")
         
         # Save results
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -370,6 +412,9 @@ def main():
         # Batch analysis
         if args.mode == 'spam_ham':
             results = classifier.batch_classify_spam_ham(args.directory, args.limit)
+        elif args.mode == 'detailed':
+            # Batch detailed analysis
+            results = classifier.batch_analyze_detailed(args.directory, args.limit)
             
             # Print summary
             total = len(results["SPAM"]) + len(results["HAM"]) + len(results["ERROR"])
@@ -380,7 +425,7 @@ def main():
             
             # Save results
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_file = f"anomaly_scores/unified_spam_ham_{timestamp}.json"
+            output_file = f"anomaly_scores/unified_detailed_{timestamp}.json"
             os.makedirs(os.path.dirname(output_file), exist_ok=True)
             
             with open(output_file, 'w') as f:
