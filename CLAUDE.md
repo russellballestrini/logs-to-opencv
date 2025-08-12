@@ -38,3 +38,20 @@ A BMP to JPG converter utility has been created in `utils/bmp_to_jpg.py` specifi
 ## Git Commit Messages
 
 When making commits, do not include Claude Code attribution (e.g., "🤖 Generated with Claude Code" or "Co-Authored-By: Claude") in commit messages. Keep commit messages clean and focused on the changes made.
+
+## Scientific Method and Model Improvements
+
+When improving machine learning models, follow proper scientific methodology:
+
+1. **Isolate Variables**: Only change ONE thing at a time when testing improvements
+   - If testing new feature extraction, don't also change the algorithm
+   - If testing a new algorithm, keep the same features and data
+   - If augmenting data, keep the model architecture constant
+
+2. **Baseline Comparison**: Always compare against the current baseline before making changes
+
+3. **Measure Impact**: Test each change in isolation to understand its specific effect
+
+4. **Document Results**: Record what worked and what didn't for future reference
+
+This ensures we can properly attribute performance changes to specific modifications rather than confounding multiple variables.
